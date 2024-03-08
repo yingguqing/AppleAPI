@@ -15,7 +15,7 @@ print("{} - {}".format("*" * 10, find_packages()))
 
 setup(
     name='AppleAPI',  # 包名字
-    version='1.0.0',  # 包版本
+    version='1.0.2',  # 包版本
     author='影孤清',  # 作者
     author_email='yingguqing@163.com',  # 作者邮箱
     keywords='ios apple appstore app store connect api appstoreconnectapi',

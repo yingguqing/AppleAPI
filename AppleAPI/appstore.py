@@ -45,7 +45,7 @@ class AppStore(object):
         """文件保存路径"""
         #  在脚本目录下创建一个开发者名称的文件夹，文件保存在这个文件夹下
         if self._foldPath is None:
-            self._foldPath = Path(os.path.split(os.path.realpath(__file__))[0]).joinpath(self.email)
+            self._foldPath = Path().resolve().joinpath(self.email)
             # 创建文件夹
             if not self._foldPath.exists():
                 self._foldPath.mkdir()
@@ -77,7 +77,8 @@ class AppStore(object):
     def profilePath(self, is_dev:bool, isOverwrite:bool = True) -> Path:
         """描述文件保存路径"""
         title = 'dev' if is_dev else 'dis'
-        path =  self.foldPath.joinpath(f'{self.bundle_id}_{title}.mobileprovision')
+        name = self.bundle_name if "*" in self.bundle_id else self.bundle_id 
+        path =  self.foldPath.joinpath(f'{name}_{title}.mobileprovision')
         if isOverwrite and path.exists():
             os.remove(path)
         return path
@@ -248,7 +249,7 @@ class AppStore(object):
             die('version不能为空')
         print("开始上传App截图")
         # 检查5图配置的目录是否存在
-        currentPath = Path(os.path.split(os.path.realpath(__file__))[0])
+        currentPath = Path().resolve()
         for (local, screenshotDic) in self.screenshots.items():
             typeDic = {}
             for (type, dir) in screenshotDic.items():       
