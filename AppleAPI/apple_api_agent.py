@@ -13,7 +13,13 @@ from datetime import timedelta
 from pprint import pprint
 from typing import List, Tuple, Optional
 from urllib.parse import urljoin, urlencode
-from OpenSSL.crypto import dump_certificate_request, PKey, TYPE_RSA, X509Req, FILETYPE_PEM, load_certificate, FILETYPE_ASN1, PKCS12
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+from cryptography.hazmat.primitives.serialization import pkcs12, PrivateFormat, BestAvailableEncryption
 
 import jwt
 import requests
@@ -311,7 +317,7 @@ class APIAgent:
         return Certificate(tmp_dict) if tmp_dict else None
 
 
-    def make_csr_content(self, developer_name: str, email: str, country_name: str = None) -> Tuple[PKey, bytes]:
+    def make_csr_content(self, developer_name: str, email: str, country_name: str = None) -> Tuple[RSAPrivateKey, bytes]:
         """
         创建CSR文件和私钥文件
         # openssl genrsa -out aps_development.key 2048
@@ -319,21 +325,28 @@ class APIAgent:
         # 1.得到csr文件和私钥文件
         """
         # create public/private key
-        key = PKey()
-        key.generate_key(TYPE_RSA, 2048)
-        # Generate CSR
-        req = X509Req()
-        req.get_subject().CN = developer_name  # 名称
-        req.get_subject().emailAddress = email  # 邮箱
+        # 生成一个随机密钥
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+        # 创建一个X509 Name对象
+        attribute = [
+            x509.NameAttribute(NameOID.COMMON_NAME, developer_name),
+            x509.NameAttribute(NameOID.EMAIL_ADDRESS, email)
+        ]
         if country_name:
-            req.get_subject().C = country_name  # 国家简称
-        req.set_pubkey(key)
-        req.sign(key, 'sha256')
-        csrContent = dump_certificate_request(FILETYPE_PEM, req)
-        return key, csrContent
+            attribute.append(x509.NameAttribute(NameOID.COUNTRY_NAME, country_name))
+        name = x509.Name(attribute)
+
+        # 创建一个X509 Request对象
+        x509_req = x509.CertificateSigningRequestBuilder().subject_name(name).sign(private_key, hashes.SHA256())
+
+        # 将X509 Request写入文件
+        csrContent = x509_req.public_bytes(serialization.Encoding.PEM)
+        # 返回私钥和X509请求
+        return private_key, csrContent
 
    
-    def export_p12(self, cer_content, privateKey: PKey, save_path:Path, password:str = None):
+    def export_p12(self, cer_content, privateKey: RSAPrivateKey, save_path:Path, password:str = None):
         """
         将pem文件和私钥合并，导出成p12文件
         # openssl x509 -inform DER -outform PEM -in aps_development.cer -out aps_development.pem
@@ -341,18 +354,15 @@ class APIAgent:
         # openssl pkcs12 -inkey aps_development.key -in aps_development.pem -export -out aps_development.p12
         # 3.将pem文件和私钥合并，导出成p12文件。
         """
-        cert = load_certificate(FILETYPE_ASN1, cer_content)
-        p12 = PKCS12()
-        p12.set_certificate(cert)
-        p12.set_ca_certificates([cert])
-        p12.set_privatekey(privateKey)
-        if password:
-            passphrase = password.encode("utf-8")
-        else:
-            passphrase = None
-        p12_bytes = p12.export(passphrase=passphrase)
-        if save_path:
-            save_path.write_bytes(p12_bytes)
+        cert = x509.load_der_x509_certificate(cer_content)
+        encryption = (
+            PrivateFormat.PKCS12.encryption_builder().
+            kdf_rounds(50000).
+            key_cert_algorithm(pkcs12.PBES.PBESv1SHA1And3KeyTripleDESCBC).
+            hmac_hash(hashes.SHA1()).build(password.encode("utf-8"))
+        )
+        p12 = pkcs12.serialize_key_and_certificates(None, privateKey, cert, None, encryption)
+        save_path.write_bytes(p12)
 
     def create_certificates_export_p12(self, info:CertificateInfo):
         """创建dis证书，并保存成p12"""

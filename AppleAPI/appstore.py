@@ -101,6 +101,8 @@ class AppStore(object):
             die('email不能为空')
         if not self.developer_name:
             die('name不能为空')
+        if not self.password:
+            die('password不能为空')
         title = 'dev' if is_dev else 'dis'
         print(f'开始创建{title}证书')
         info = self.certificateInfo(is_dev)
