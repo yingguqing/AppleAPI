@@ -13,7 +13,7 @@
 from AppleAPI import AppStore
 
 if __name__ == '__main__':
-  	# 必填
+    # 必填
     issuer_id = 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' 
     # 必填
     key_id = 'XXXXXXXXXX' 						
