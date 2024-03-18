@@ -9,17 +9,6 @@ from pathlib import Path
 from typing import List
 
 class AppStore(object):
-
-    email: str = None                           # 开发者邮箱 (必填，非空)
-    developer_name: str = None                  # 开发者名称 (必填，非空)
-    country_name:  str = None                   # 国家简称 (可选)
-    password: str = None                        # 证书p12的密码 (可选)
-    bundle_id: str = None                       # bundle id (必填，非空)
-    bundle_name: str = None                     # bundle id的名称(必填，非空，只能字母和数字)
-    capabilitys: List[str] = None               # 权限, 比如： ASSOCIATED_DOMAINS，APPLE_ID_AUTH
-    devices:dict = None                         # 测试设备，设备udid为key，名称为value
-    appstore_version: str = None                # 提审版本号
-    screenshots:dict[str:dict[str:str]] = None  # 上传的5图配置，格式{"语言代码": {"尺寸":"五图目录"}}
     
     def __init__(self, issuer_id:str, key_id:str, key:str) -> None:
         # 解析配置文件内容
@@ -34,7 +23,6 @@ class AppStore(object):
         if not key:
             die('key不能为空')
 
-        self._bundle_id_info = None
         self._foldPath = None
         # 创建请求的Agent
         token_manager = TokenManager(issuer_id=issuer_id, key_id=key_id, key=key)
@@ -45,99 +33,103 @@ class AppStore(object):
         """文件保存路径"""
         #  在脚本目录下创建一个开发者名称的文件夹，文件保存在这个文件夹下
         if self._foldPath is None:
-            self._foldPath = Path().resolve().joinpath(self.email)
+            self._foldPath = Path().resolve().joinpath('file')
             # 创建文件夹
             if not self._foldPath.exists():
                 self._foldPath.mkdir()
         return self._foldPath
 
-    def p12Path(self, is_dev:bool, isOverwrite:bool = True) -> Path:
+    def p12Path(self, is_dev:bool, password:str, isOverwrite:bool = True) -> Path:
         """p12文件保存路径"""
         title = 'dev' if is_dev else 'dis'
-        if self.password:
-            p12name = f'{title}_密码{self.password}.p12'
+        if password:
+            p12name = f'{title}_密码{password}.p12'
         else:
             p12name = '{title}_无密码.p12'
         path = self.foldPath.joinpath(p12name)
         if isOverwrite and path.exists():
             os.remove(path)
         return path
-
-    def certificateInfo(self, is_dev:bool) -> CertificateInfo:
-        """证书信息"""
-        return CertificateInfo(
-            is_dev=is_dev,
-            email=self.email,
-            password=self.password,
-            developer_name=self.developer_name,
-            country_name=self.country_name,
-            save_path=self.p12Path(is_dev)
-        )
     
-    def profilePath(self, is_dev:bool, isOverwrite:bool = True) -> Path:
+    def profilePath(self, is_dev:bool, bundle_id:str, name:str, isOverwrite:bool = True) -> Path:
         """描述文件保存路径"""
         title = 'dev' if is_dev else 'dis'
-        name = self.bundle_name if "*" in self.bundle_id else self.bundle_id 
+        name = name if "*" in bundle_id else bundle_id
         path =  self.foldPath.joinpath(f'{name}_{title}.mobileprovision')
         if isOverwrite and path.exists():
             os.remove(path)
         return path
     
-    @property
-    def bundle_id_info(self) -> BundleId:
+    def appstore_bundle_id(self, bundle_id:str) -> BundleId:
         """
         获取对应的BundleId
         @param identifier: BundleId的identifier, 例如：com.hello.world
         @return:
         """
-        if not self._bundle_id_info:
-            list = self.agent.list_bundle_id(filters={"identifier":self.bundle_id})
-            self._bundle_id_info = list[0] if list else None
-        return self._bundle_id_info
+        list = self.agent.list_bundle_id(filters={"identifier":bundle_id})
+        return list[0] if list else None
 
-    def create_certificate(self, is_dev:bool):
-        """创建证书"""
-        if not self.email:
+    def create_certificate(self, is_dev:bool, email:str, developer_name:str, password:str, country:str):
+        """
+        创建证书
+        @param is_dev: true:创建开发证书，false:发布证书
+        @param email: 邮箱地址
+        @param developer_name:开发都名称
+        @param password: p12文件密码
+        @param country: 国家代码。比如：IN，US
+        """
+        if not email:
             die('email不能为空')
-        if not self.developer_name:
+        if not developer_name:
             die('name不能为空')
-        if not self.password:
+        if not password:
             die('password不能为空')
         title = 'dev' if is_dev else 'dis'
         print(f'开始创建{title}证书')
-        info = self.certificateInfo(is_dev)
+        save_path = self.p12Path(is_dev, password=password)
+        info =  CertificateInfo(
+            is_dev=is_dev,
+            email=email,
+            password=password,
+            developer_name=developer_name,
+            country_name=country,
+            save_path=save_path
+        )
         self.agent.create_certificates_export_p12(info)
-        print(f'{title}证书保存成功')
+        print(f'{title}证书保存成功:{save_path}')
 
-    def create_bundle_id(self):
-        """创建Bundle Id"""
-        if not self.bundle_id:
+    def create_bundle_id(self, bundle_id:str, bundle_name:str, capabilitys: List[str]=None):
+        """
+        创建Bundle Id
+        @param bundle_id: 唯一标识
+        @param bundle_name: 名称
+        @param capabilitys: 权限。比如：ASSOCIATED_DOMAINS，APPLE_ID_AUTH
+        """
+        if not bundle_id:
             die('bundle_id不能为空')
-        if not self.bundle_name:
+        if not bundle_name:
             die('bundle_name不能为空')
-        item = self.bundle_id_info
+        item = self.appstore_bundle_id(bundle_id)
         if item:
             print('Bundle Id已存在，不能创建')
             return
         print('开始创建Bundle Id')
         # 创建Bundle Id
-        result_dict = self.agent.register_bundle_id(bundle_id=self.bundle_id, name=self.bundle_name)
+        result_dict = self.agent.register_bundle_id(bundle_id=bundle_id, name=bundle_name)
         tmp_dict = result_dict.get('data', {})
-        bundle_id = BundleId(tmp_dict)
-        self._bundle_id_info = bundle_id
-        if bundle_id.attributes.identifier == self.bundle_id:
+        app_bundle_id = BundleId(tmp_dict)
+        if app_bundle_id.attributes.identifier == bundle_id:
             # 开启相应权限功能
-            self.capability(bundle_id)
+            self.capability(app_bundle_id, capabilitys)
             print('创建Bundle Id完成')
         else:
             print('创建Bundle Id失败')
 
-    def capability(self, bundle_id: BundleId):
+    def capability(self, bundle_id: BundleId, capabilitys: List[str]):
         """开启相应权限功能"""
-        if not self.capabilitys:
+        if not capabilitys or not bundle_id:
             return
-        bundle_id = bundle_id if bundle_id else self.bundle_id_info
-        for type in self.capabilitys:
+        for type in capabilitys:
             settings = []
             # 苹果登录
             if type == "APPLE_ID_AUTH":
@@ -151,7 +143,7 @@ class AppStore(object):
                         ]
                     }
                 ]
-            self.agent.enable_a_capabilities(bundle_id=bundle_id.id, capability_type=type, settings=settings)
+            self.agent.enable_a_capabilities(inner_bundle_id=bundle_id.id, capability_type=type, settings=settings)
 
     def get_cer_list(self, is_dev=True) -> List[Certificate]:
         """
@@ -174,32 +166,40 @@ class AppStore(object):
                 cer_list.append(tmp_cer)
         return cer_list
     
-    def create_profile(self, is_dev:bool):
-        """创建发布描述文件"""
-        if not self.bundle_id:
+    def create_profile(self, is_dev:bool, bundle_id:str, name:str):
+        """
+        创建描述文件
+        @param is_dev: true:开发，false:发布
+        @param bundle_id: bundle id
+        @param name: 描述文件名称
+        """
+        if not bundle_id:
             die('bundleId不能为空')
-        if not self.bundle_name:
-            die('bundle_name不能为空')
+        if not name:
+            die('name不能为空')
         title = 'dev' if is_dev else 'dis'
         print(f'开始创建{title}描述文件')
-        name = f'{self.bundle_name.lower()}_{title}'
+        name = f'{name}_{title}'
         profile_list = self.agent.list_profiles(filters={"name": name})
         for profile in profile_list:
             self.agent.delete_a_profile(profile.id)
         type = ProfileType.IOS_APP_DEVELOPMENT.value if is_dev else ProfileType.IOS_APP_STORE.value
         attrs = ProfileCreateReqAttrs(name, type)
-        bundle_id = self.bundle_id_info
+        appstore_bundle_id = self.appstore_bundle_id(bundle_id)
         cer_list = self.get_cer_list(is_dev)
         devices = self.agent.list_devices(filters={"platform": "IOS", "status": DeviceStatus.ENABLED.name}) if is_dev else []
         # 创建新的Profile
-        profile = self.agent.create_a_profile(attrs=attrs, bundle_id=bundle_id, devices=devices, certificates=cer_list)
-        filePath = self.profilePath(is_dev)
+        profile = self.agent.create_a_profile(attrs=attrs, bundle_id=appstore_bundle_id, devices=devices, certificates=cer_list)
+        filePath = self.profilePath(is_dev, bundle_id=bundle_id, name=name)
         profile.attributes.save_content(filePath)
-        print(f'发布描述文件创建并下载完成')
+        print(f'{title}描述文件创建并下载完成:{filePath}')
 
-    def add_devices(self):
-        """添加设备"""
-        if not self.devices:
+    def add_devices(self, devices:dict[str:str]):
+        """
+        添加设备
+        @param devices: 测试设备。格式：{'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx设备id' : '设备名称(可选)，比如：iphone6s'}
+        """
+        if not devices:
             die('devices不能为空')
         # 获取device设备列表，排除掉已添加的设备
         print('开始添加设备')
@@ -209,7 +209,7 @@ class AppStore(object):
         successDevices = []
         faildDevices = []
         # 添加设备
-        for udid, name in self.devices.items():
+        for udid, name in devices.items():
             # 取出后台测试中，和准备添加的设备id相同的的有设备
             in_devices = list(filter(lambda item: item.udid.lower() == udid.lower(), device_list))
             if len(in_devices) > 0:
@@ -241,18 +241,32 @@ class AppStore(object):
         if faildStr:
             print(f'以下设备添加失败：\n{faildStr}')
 
-    def upload_screenshot(self):
-        """上传App截图"""
-        if not self.bundle_id:
+    def upload_screenshot(self, bundle_id:str, appstore_version: str, screenshots:dict[str:dict[str:str]]):
+        """
+        上传App截图,自动上传对应尺寸目录下所有图片文件
+        @param bundle_id: bundle id
+        @param appstore_version: 提审版本号
+        @param screenshots: 5图相关。格式：
+        {
+            'zh-Hans' : {
+                "APP_IPHONE_67"           : "C:/Users/Administrator/Desktop/python/iPhone14PM-6.7",
+                "APP_IPHONE_65"           : "C:/Users/Administrator/Desktop/python/iPhone11PM-6.5",
+                "APP_IPHONE_55"           : "C:/Users/Administrator/Desktop/python/iPhone8P-5.5",
+                "APP_IPAD_PRO_3GEN_129"   : "C:/Users/Administrator/Desktop/python/iPadPro-12.9",
+                "APP_IPAD_PRO_129"        : "C:/Users/Administrator/Desktop/python/iPadPro-12.9",
+            }
+        }
+        """
+        if not bundle_id:
             die('bundle_id不能为空')
-        if not self.screenshots:
+        if not screenshots:
             die('screenshot不能为空')
-        if not self.appstore_version:
+        if not appstore_version:
             die('version不能为空')
         print("开始上传App截图")
         # 检查5图配置的目录是否存在
         currentPath = Path().resolve()
-        for (local, screenshotDic) in self.screenshots.items():
+        for (local, screenshotDic) in screenshots.items():
             typeDic = {}
             for (type, dir) in screenshotDic.items():       
                 if not Path(dir).exists():
@@ -260,22 +274,22 @@ class AppStore(object):
                     if not Path(dir).exists():
                         die(f'{local}语言下 {type} 5图目录 {dir} 不存在')
                 typeDic[type] = dir
-            self.screenshots[local] = typeDic
+            screenshots[local] = typeDic
         # 所有5图尺寸集
-        appleIds = self.agent.list_apps(filters={"bundleId": self.bundle_id})
+        appleIds = self.agent.list_apps(filters={"bundleId": bundle_id})
         if appleIds:
             appleId = appleIds[0].id
         else:
-            die(f"通过Bundle id：{self.bundle_id}未找到apple id")
+            die(f"通过Bundle id：{bundle_id}未找到apple id")
         print(f"apple id:{appleId}")
-        resourceIds = self.agent.list_appstore_version(appleId, filters={"versionString":self.appstore_version, "platform":"IOS"})
+        resourceIds = self.agent.list_appstore_version(appleId, filters={"versionString":appstore_version, "platform":"IOS"})
         if resourceIds:
             resourceId = resourceIds[0].id
         else:
             die("未找到资源id")
         print(f"资源id:{resourceId}")
         locale_list = self.agent.list_localization(resourceId)
-        for (local,screenshotDic) in self.screenshots.items():
+        for (local,screenshotDic) in screenshots.items():
             in_locals = list(filter(lambda item: item.locale.lower() == local.lower(), locale_list))
             if not in_locals:
                 select_local = self.agent.create_localization(resourceId, local)
@@ -312,14 +326,14 @@ class AppStore(object):
                         screenshot = self.agent.create_app_screenshot(set_id, file)
                         while True:
                             if retry > 3:
-                                print(f'上传 {file} 截图失败')
+                                print(f'{file} 上传失败')
                                 break
                             self.agent.upload_app_screenshot(screenshot, file)
                             state = self.agent.verify_app_screenshot(screenshot.id, file)
                             if state == AppScreenshotState.UPLOAD_COMPLETE:
-                                print(f'上传 {file} 截图成功')
+                                print(f'{file} 上传成功')
                                 break
                             else:
                                 retry += 1
-                                print(f'{file}上传失败，正在进行第{retry}次重试')
+                                print(f'{file} 上传失败，正在进行第{retry}次重试')
 

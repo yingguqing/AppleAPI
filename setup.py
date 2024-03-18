@@ -24,7 +24,7 @@ setup(
     long_description_content_type='text/markdown',
     url='https://github.com/yingguqing/AppleAPI',  # 包的主页
     packages=find_packages(),  # 包
-    install_requires=['PyJWT~=2.0', 'pyOpenSSL~=24.0.0', 'requests~=2.20'],
+    install_requires=['PyJWT~=2.0', 'pyOpenSSL>=20.0.0', 'requests~=2.20'],
     python_requires="~=3.7",
     classifiers=[
         "Development Status :: 5 - Production/Stable",
@@ -33,6 +33,7 @@ setup(
         "Topic :: Software Development :: Libraries :: Python Modules",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
 )
 

@@ -424,7 +424,7 @@ class APIAgent:
         def retry_judge_func(code, status):
             print(f'code:{code}, state:{status}')
             if str(status) == '409' and code == 'ENTITY_ERROR.ATTRIBUTE.INVALID':
-                die(f'{bundle_id}已存在，请使用其他bundle_id')
+                die(f'{bundle_id}已存在，或{name}不合法。name最好用纯字母。')
             return True, 0
         
         result = self._api_call(url, method=HttpMethod.POST, post_data=post_data, retry_judge_func=retry_judge_func)
