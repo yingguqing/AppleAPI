@@ -87,15 +87,7 @@ class AppStore(object):
         title = 'dev' if is_dev else 'dis'
         print(f'开始创建{title}证书')
         save_path = self.p12Path(is_dev, password=password)
-        info =  CertificateInfo(
-            is_dev=is_dev,
-            email=email,
-            password=password,
-            developer_name=developer_name,
-            country_name=country,
-            save_path=save_path
-        )
-        self.agent.create_certificates_export_p12(info)
+        self.agent.create_certificates_export_p12(is_dev=is_dev, email=email, developer_name=developer_name, password=password, country=country, save_path=save_path)
         print(f'{title}证书保存成功:{save_path}')
 
     def create_bundle_id(self, bundle_id:str, bundle_name:str, capabilitys: List[str]=None):

@@ -14,16 +14,6 @@ from typing import Dict, Union
 
 from mobileprovision.parser import MobileProvisionModel
 
-class CertificateInfo:
-    """创建证书相关参数"""
-    def __init__(self, is_dev:bool = True, email: str = None, password:str = None, developer_name: str = None, country_name: str = None, save_path:Path = None) -> None:
-        self.is_dev = is_dev
-        self.email = email
-        self.password = password
-        self.developer_name = developer_name
-        self.country_name = country_name
-        self.save_path = save_path
-
 class EnumAutoName(Enum):
     def _generate_next_value_(name, start, count, last_values):
         return name

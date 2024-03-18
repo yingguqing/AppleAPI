@@ -364,20 +364,20 @@ class APIAgent:
         p12 = pkcs12.serialize_key_and_certificates(None, privateKey, cert, None, encryption)
         save_path.write_bytes(p12)
 
-    def create_certificates_export_p12(self, info:CertificateInfo):
+    def create_certificates_export_p12(self, is_dev:bool, email:str, developer_name:str, password:str, country:str, save_path:Path):
         """创建dis证书，并保存成p12"""
         # 创建CSR文件
-        key, csrContent = self.make_csr_content(info.developer_name, info.email, info.country_name)
+        key, csrContent = self.make_csr_content(developer_name, email, country)
         # 找出 begin和end之间内容
         pattern = '-----BEGIN[^-]+-----(.+)-----END[^-]+-----'
         result = re.search(pattern, str(csrContent, 'UTF-8'), flags=re.DOTALL)
         csr_content = result.group(1).replace('\n', '')  # 删除所有换行符
-        certificate_type = CertificateType.DEVELOPMENT if info.is_dev else CertificateType.DISTRIBUTION
+        certificate_type = CertificateType.DEVELOPMENT if is_dev else CertificateType.DISTRIBUTION
         cer = self.create_certificates(csr_content=csr_content, certificate_type=certificate_type)
         if cer.attributes.certificate_content:
             cer_content = base64.b64decode(cer.attributes.certificate_content)
             # 将cer和私钥合并成p12
-            self.export_p12(cer_content, key, save_path=info.save_path, password=info.password)
+            self.export_p12(cer_content, key, save_path=save_path, password=password)
         else:
             raise ValueError('创建证书失败')
 
